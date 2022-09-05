@@ -1,0 +1,74 @@
+- name: deploy-redash
+  hosts: redash
+  become: yes
+
+  tasks:
+    - name: update packages
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+        force_apt_get: true
+        upgrade: dist
+  
+    - name: Install required system packages
+      apt: name={{ item }} state=latest update_cache=yes
+      loop: [ 'apt-transport-https', 'ca-certificates', 'curl', 
+            'software-properties-common', 'python3-pip', 
+            'virtualenv', 'python3-setuptools', 'python3-venv', 'libpq-dev', 'python3-psycopg2']
+    
+    - name: ensure repository key is installed
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: ensure docker registry is available
+      apt_repository: repo='deb https://download.docker.com/linux/ubuntu bionic stable' state=present
+
+    - name: ensure docker and dependencies are installed
+      apt: name=docker-ce update_cache=yes
+
+    - service: name=docker state=restarted
+
+    - name: Install docker-compose from official github repo
+      get_url:
+        url : https://github.com/docker/compose/releases/download/1.29.2/docker-compose-Linux-x86_64
+        dest: /usr/local/bin/docker-compose
+        mode: 'u+x,g+x'
+
+    - name: Create redash folder
+      file: 
+        path: /app/redash/
+        owner: anatolii 
+        group: anatolii 
+        mode: 0755 
+        state: directory
+    
+    - name: Copy docker-compose
+      ansible.builtin.copy:
+        src: redash/docker-compose.yaml
+        dest: /app/redash
+        owner: anatolii
+        group: anatolii
+        mode: u=rwx,g=rx,o=rx
+    
+    - name: Copy dockerfile
+      ansible.builtin.copy:
+        src: redash/Dockerfile
+        dest: /app/redash
+        owner: anatolii
+        group: anatolii
+        mode: u=rwx,g=rx,o=rx
+    
+    - name: Copy start.sh
+      ansible.builtin.copy:
+        src: redash/start.sh
+        dest: /app/redash
+        owner: anatolii
+        group: anatolii
+        mode: u=rwx,g=rx,o=rx
+     
+    - name: Run redash
+      shell:
+        cmd: "docker-compose up -d"
+        chdir: /app/redash/   
+    
